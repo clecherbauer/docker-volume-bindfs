@@ -1,4 +1,4 @@
-PLUGIN_NAME = vieux/sshfs
+PLUGIN_NAME = lebokus/bindfs
 PLUGIN_TAG ?= next
 
 all: clean rootfs create
@@ -8,7 +8,7 @@ clean:
 	@rm -rf ./plugin
 
 rootfs:
-	@echo "### docker build: rootfs image with docker-volume-sshfs"
+	@echo "### docker build: rootfs image with docker-volume-bindfs"
 	@docker build -q -t ${PLUGIN_NAME}:rootfs .
 	@echo "### create rootfs directory in ./plugin/rootfs"
 	@mkdir -p ./plugin/rootfs

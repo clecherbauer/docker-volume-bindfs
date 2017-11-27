@@ -10,41 +10,36 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/go-plugins-helpers/volume"
 )
 
-const socketAddress = "/run/docker/plugins/sshfs.sock"
+const socketAddress = "/run/docker/plugins/bindfs.sock"
 
-type sshfsVolume struct {
-	Password string
-	Sshcmd   string
-	Port     string
-
-	Options []string
-
-	Mountpoint  string
+type bindfsVolume struct {
+	options []string
+	sourcePath   string
+	mountPoint  string
 	connections int
 }
 
-type sshfsDriver struct {
+type bindfsDriver struct {
 	sync.RWMutex
 
 	root      string
 	statePath string
-	volumes   map[string]*sshfsVolume
+	volumes   map[string]*bindfsVolume
 }
 
-func newSshfsDriver(root string) (*sshfsDriver, error) {
+func newBindfsDriver(root string) (*bindfsDriver, error) {
 	logrus.WithField("method", "new driver").Debug(root)
 
-	d := &sshfsDriver{
+	d := &bindfsDriver{
 		root:      filepath.Join(root, "volumes"),
-		statePath: filepath.Join(root, "state", "sshfs-state.json"),
-		volumes:   map[string]*sshfsVolume{},
+		statePath: filepath.Join(root, "state", "bindfs-state.json"),
+		volumes:   map[string]*bindfsVolume{},
 	}
 
 	data, err := ioutil.ReadFile(d.statePath)
@@ -63,7 +58,7 @@ func newSshfsDriver(root string) (*sshfsDriver, error) {
 	return d, nil
 }
 
-func (d *sshfsDriver) saveState() {
+func (d *bindfsDriver) saveState() {
 	data, err := json.Marshal(d.volumes)
 	if err != nil {
 		logrus.WithField("statePath", d.statePath).Error(err)
@@ -75,34 +70,30 @@ func (d *sshfsDriver) saveState() {
 	}
 }
 
-func (d *sshfsDriver) Create(r *volume.CreateRequest) error {
+func (d *bindfsDriver) Create(r *volume.CreateRequest) error {
 	logrus.WithField("method", "create").Debugf("%#v", r)
 
 	d.Lock()
 	defer d.Unlock()
-	v := &sshfsVolume{}
+	v := &bindfsVolume{}
 
 	for key, val := range r.Options {
 		switch key {
-		case "sshcmd":
-			v.Sshcmd = val
-		case "password":
-			v.Password = val
-		case "port":
-			v.Port = val
+		case "sourcePath":
+			v.sourcePath = val
 		default:
 			if val != "" {
-				v.Options = append(v.Options, key+"="+val)
+				v.options = append(v.options, key+"="+val)
 			} else {
-				v.Options = append(v.Options, key)
+				v.options = append(v.options, key)
 			}
 		}
 	}
 
-	if v.Sshcmd == "" {
-		return logError("'sshcmd' option required")
+	if v.sourcePath == "" {
+		return logError("'sourcePath' option required")
 	}
-	v.Mountpoint = filepath.Join(d.root, fmt.Sprintf("%x", md5.Sum([]byte(v.Sshcmd))))
+	v.mountPoint = filepath.Join(d.root, fmt.Sprintf("%x", md5.Sum([]byte(v.sourcePath))))
 
 	d.volumes[r.Name] = v
 
@@ -111,7 +102,7 @@ func (d *sshfsDriver) Create(r *volume.CreateRequest) error {
 	return nil
 }
 
-func (d *sshfsDriver) Remove(r *volume.RemoveRequest) error {
+func (d *bindfsDriver) Remove(r *volume.RemoveRequest) error {
 	logrus.WithField("method", "remove").Debugf("%#v", r)
 
 	d.Lock()
@@ -125,7 +116,7 @@ func (d *sshfsDriver) Remove(r *volume.RemoveRequest) error {
 	if v.connections != 0 {
 		return logError("volume %s is currently used by a container", r.Name)
 	}
-	if err := os.RemoveAll(v.Mountpoint); err != nil {
+	if err := os.RemoveAll(v.mountPoint); err != nil {
 		return logError(err.Error())
 	}
 	delete(d.volumes, r.Name)
@@ -133,7 +124,7 @@ func (d *sshfsDriver) Remove(r *volume.RemoveRequest) error {
 	return nil
 }
 
-func (d *sshfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
+func (d *bindfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) {
 	logrus.WithField("method", "path").Debugf("%#v", r)
 
 	d.RLock()
@@ -144,10 +135,10 @@ func (d *sshfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error) 
 		return &volume.PathResponse{}, logError("volume %s not found", r.Name)
 	}
 
-	return &volume.PathResponse{Mountpoint: v.Mountpoint}, nil
+	return &volume.PathResponse{Mountpoint: v.mountPoint}, nil
 }
 
-func (d *sshfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
+func (d *bindfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
 	logrus.WithField("method", "mount").Debugf("%#v", r)
 
 	d.Lock()
@@ -159,9 +150,9 @@ func (d *sshfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, erro
 	}
 
 	if v.connections == 0 {
-		fi, err := os.Lstat(v.Mountpoint)
+		fi, err := os.Lstat(v.mountPoint)
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(v.Mountpoint, 0755); err != nil {
+			if err := os.MkdirAll(v.mountPoint, 0755); err != nil {
 				return &volume.MountResponse{}, logError(err.Error())
 			}
 		} else if err != nil {
@@ -169,7 +160,7 @@ func (d *sshfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, erro
 		}
 
 		if fi != nil && !fi.IsDir() {
-			return &volume.MountResponse{}, logError("%v already exist and it's not a directory", v.Mountpoint)
+			return &volume.MountResponse{}, logError("%v already exist and it's not a directory", v.mountPoint)
 		}
 
 		if err := d.mountVolume(v); err != nil {
@@ -179,10 +170,10 @@ func (d *sshfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, erro
 
 	v.connections++
 
-	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
+	return &volume.MountResponse{Mountpoint: v.mountPoint}, nil
 }
 
-func (d *sshfsDriver) Unmount(r *volume.UnmountRequest) error {
+func (d *bindfsDriver) Unmount(r *volume.UnmountRequest) error {
 	logrus.WithField("method", "unmount").Debugf("%#v", r)
 
 	d.Lock()
@@ -195,7 +186,7 @@ func (d *sshfsDriver) Unmount(r *volume.UnmountRequest) error {
 	v.connections--
 
 	if v.connections <= 0 {
-		if err := d.unmountVolume(v.Mountpoint); err != nil {
+		if err := d.unmountVolume(v.mountPoint); err != nil {
 			return logError(err.Error())
 		}
 		v.connections = 0
@@ -204,7 +195,7 @@ func (d *sshfsDriver) Unmount(r *volume.UnmountRequest) error {
 	return nil
 }
 
-func (d *sshfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
+func (d *bindfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 	logrus.WithField("method", "get").Debugf("%#v", r)
 
 	d.Lock()
@@ -215,10 +206,10 @@ func (d *sshfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 		return &volume.GetResponse{}, logError("volume %s not found", r.Name)
 	}
 
-	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
+	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.mountPoint}}, nil
 }
 
-func (d *sshfsDriver) List() (*volume.ListResponse, error) {
+func (d *bindfsDriver) List() (*volume.ListResponse, error) {
 	logrus.WithField("method", "list").Debugf("")
 
 	d.Lock()
@@ -226,28 +217,21 @@ func (d *sshfsDriver) List() (*volume.ListResponse, error) {
 
 	var vols []*volume.Volume
 	for name, v := range d.volumes {
-		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
+		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.mountPoint})
 	}
 	return &volume.ListResponse{Volumes: vols}, nil
 }
 
-func (d *sshfsDriver) Capabilities() *volume.CapabilitiesResponse {
+func (d *bindfsDriver) Capabilities() *volume.CapabilitiesResponse {
 	logrus.WithField("method", "capabilities").Debugf("")
 
 	return &volume.CapabilitiesResponse{Capabilities: volume.Capability{Scope: "local"}}
 }
 
-func (d *sshfsDriver) mountVolume(v *sshfsVolume) error {
-	cmd := exec.Command("sshfs", "-oStrictHostKeyChecking=no", v.Sshcmd, v.Mountpoint)
-	if v.Port != "" {
-		cmd.Args = append(cmd.Args, "-p", v.Port)
-	}
-	if v.Password != "" {
-		cmd.Args = append(cmd.Args, "-o", "workaround=rename", "-o", "password_stdin")
-		cmd.Stdin = strings.NewReader(v.Password)
-	}
+func (d *bindfsDriver) mountVolume(v *bindfsVolume) error {
+	cmd := exec.Command("bindfs", v.sourcePath, v.mountPoint)
 
-	for _, option := range v.Options {
+	for _, option := range v.options {
 		cmd.Args = append(cmd.Args, "-o", option)
 	}
 
@@ -255,7 +239,7 @@ func (d *sshfsDriver) mountVolume(v *sshfsVolume) error {
 	return cmd.Run()
 }
 
-func (d *sshfsDriver) unmountVolume(target string) error {
+func (d *bindfsDriver) unmountVolume(target string) error {
 	cmd := fmt.Sprintf("umount %s", target)
 	logrus.Debug(cmd)
 	return exec.Command("sh", "-c", cmd).Run()
@@ -272,7 +256,7 @@ func main() {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	d, err := newSshfsDriver("/mnt")
+	d, err := newBindfsDriver("/mnt")
 	if err != nil {
 		log.Fatal(err)
 	}
