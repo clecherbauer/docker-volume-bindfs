@@ -1,11 +1,7 @@
-FROM library/golang:1.9-alpine as builder
+FROM golang:1.9-stretch as builder
 COPY . /go/src/github.com/lebokus/docker-volume-bindfs
 WORKDIR /go/src/github.com/lebokus/docker-volume-bindfs
-RUN set -ex \
-    && apk add --no-cache --virtual .build-deps \
-    gcc libc-dev \
-    && go install --ldflags '-extldflags "-static"' \
-    && apk del .build-deps
+RUN set -ex && go install --ldflags '-extldflags "-static"'
 CMD ["/go/bin/docker-volume-bindfs"]
 
 FROM debian
