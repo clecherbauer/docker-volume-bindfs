@@ -41,10 +41,19 @@
         "source"
       ],
       "type": "bind"
+    },
+    {
+      "destination": "/mnt/host",
+      "options": [
+        "rbind"
+      ],
+      "name": "host-root",
+      "source": "/",
+      "settable": [
+        "source"
+      ],
+      "type": "bind"
     }
   ],
-  "network": {
-    "type": "host"
-  },
   "propagatedmount": "/mnt/volumes"
 }

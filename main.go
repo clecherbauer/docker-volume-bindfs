@@ -229,13 +229,14 @@ func (d *bindfsDriver) Capabilities() *volume.CapabilitiesResponse {
 }
 
 func (d *bindfsDriver) mountVolume(v *bindfsVolume) error {
-	cmd := exec.Command("bindfs", v.sourcePath, v.mountPoint)
+	cmd := exec.Command("bindfs", "/mnt/host" + v.sourcePath, v.mountPoint)
 
 	for _, option := range v.options {
 		cmd.Args = append(cmd.Args, "-o", option)
 	}
 
 	logrus.Debug(cmd.Args)
+
 	return cmd.Run()
 }
 

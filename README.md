@@ -1,5 +1,8 @@
 # Docker volume plugin for bindfs
-This project is based on vieux/docker-volume-sshfs and currently a "work-in-progress"
+This project is based on vieux/docker-volume-sshfs.
+With this plugin you're able to mount a given path and remap its owner and group.
+
+I recommend using this plugin with dev-environments **only**, cause of potential security issues.
 
 ## Usage
 
@@ -18,7 +21,7 @@ docker plugin install lebokus/bindfs state.source=<any_folder>
 2 - Create a volume
 
 ```
-$ docker volume create -d lebokus/bindfs -o sourcePath=./ [-o <any_bindfs_-o_option> ] bindfsvolume
+$ docker volume create -d lebokus/bindfs -o sourcePath=$PWD map=$UID/0:@$UID/@0 [-o <any_bindfs_-o_option> ] bindfsvolume
 
 $ docker volume ls
 DRIVER              VOLUME NAME
@@ -34,6 +37,30 @@ lebokus/bindfs      bindfsvolume
 
 ```
 $ docker run -it -v bindfsvolume:<path> busybox ls <path>
+```
+
+## docker-compose example
+Please note that the $UID variable is a bash and not a system variable.
+Fix it with
+```
+export UID
+```
+
+```
+version: '2'
+services:
+    app:
+        image: busybox
+        command: "ls -la /mnt/test"
+        volumes:
+          - data:/mnt/test
+
+volumes:
+    data:
+        driver: lebokus/bindfs:next
+        driver_opts:
+            sourcePath: "${PWD}"
+            map: "${UID}/0:@${UID}/@0"
 ```
 
 ## LICENSE

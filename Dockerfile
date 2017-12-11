@@ -6,6 +6,6 @@ CMD ["/go/bin/docker-volume-bindfs"]
 
 FROM debian
 RUN apt-get update && apt-get install bindfs -y
-RUN mkdir -p /run/docker/plugins /mnt/state /mnt/volumes
+RUN mkdir -p /run/docker/plugins /mnt/state /mnt/volumes /mnt/host/
 COPY --from=builder /go/bin/docker-volume-bindfs .
 CMD ["docker-volume-bindfs"]
