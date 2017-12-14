@@ -19,9 +19,9 @@ import (
 const socketAddress = "/run/docker/plugins/bindfs.sock"
 
 type bindfsVolume struct {
-	options []string
-	sourcePath   string
-	mountPoint  string
+	Options []string
+	Sourcepath   string
+	Mountpoint  string
 	connections int
 }
 
@@ -80,20 +80,20 @@ func (d *bindfsDriver) Create(r *volume.CreateRequest) error {
 	for key, val := range r.Options {
 		switch key {
 		case "sourcePath":
-			v.sourcePath = val
+			v.Sourcepath = val
 		default:
 			if val != "" {
-				v.options = append(v.options, key+"="+val)
+				v.Options = append(v.Options, key+"="+val)
 			} else {
-				v.options = append(v.options, key)
+				v.Options = append(v.Options, key)
 			}
 		}
 	}
 
-	if v.sourcePath == "" {
+	if v.Sourcepath == "" {
 		return logError("'sourcePath' option required")
 	}
-	v.mountPoint = filepath.Join(d.root, fmt.Sprintf("%x", md5.Sum([]byte(v.sourcePath))))
+	v.Mountpoint = filepath.Join(d.root, fmt.Sprintf("%x", md5.Sum([]byte(v.Sourcepath))))
 
 	d.volumes[r.Name] = v
 
@@ -116,7 +116,7 @@ func (d *bindfsDriver) Remove(r *volume.RemoveRequest) error {
 	if v.connections != 0 {
 		return logError("volume %s is currently used by a container", r.Name)
 	}
-	if err := os.RemoveAll(v.mountPoint); err != nil {
+	if err := os.RemoveAll(v.Mountpoint); err != nil {
 		return logError(err.Error())
 	}
 	delete(d.volumes, r.Name)
@@ -135,7 +135,7 @@ func (d *bindfsDriver) Path(r *volume.PathRequest) (*volume.PathResponse, error)
 		return &volume.PathResponse{}, logError("volume %s not found", r.Name)
 	}
 
-	return &volume.PathResponse{Mountpoint: v.mountPoint}, nil
+	return &volume.PathResponse{Mountpoint: v.Mountpoint}, nil
 }
 
 func (d *bindfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, error) {
@@ -150,17 +150,17 @@ func (d *bindfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, err
 	}
 
 	if v.connections == 0 {
-		fi, err := os.Lstat(v.mountPoint)
+		fi, err := os.Lstat(v.Mountpoint)
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(v.mountPoint, 0755); err != nil {
-				return &volume.MountResponse{}, logError(err.Error())
+			if err := os.MkdirAll(v.Mountpoint, 0755); err != nil {
+				return &volume.MountResponse{}, logError("test test test test")
 			}
 		} else if err != nil {
 			return &volume.MountResponse{}, logError(err.Error())
 		}
 
 		if fi != nil && !fi.IsDir() {
-			return &volume.MountResponse{}, logError("%v already exist and it's not a directory", v.mountPoint)
+			return &volume.MountResponse{}, logError("%v already exist and it's not a directory", v.Mountpoint)
 		}
 
 		if err := d.mountVolume(v); err != nil {
@@ -170,7 +170,7 @@ func (d *bindfsDriver) Mount(r *volume.MountRequest) (*volume.MountResponse, err
 
 	v.connections++
 
-	return &volume.MountResponse{Mountpoint: v.mountPoint}, nil
+	return &volume.MountResponse{Mountpoint: v.Mountpoint}, nil
 }
 
 func (d *bindfsDriver) Unmount(r *volume.UnmountRequest) error {
@@ -186,7 +186,7 @@ func (d *bindfsDriver) Unmount(r *volume.UnmountRequest) error {
 	v.connections--
 
 	if v.connections <= 0 {
-		if err := d.unmountVolume(v.mountPoint); err != nil {
+		if err := d.unmountVolume(v.Mountpoint); err != nil {
 			return logError(err.Error())
 		}
 		v.connections = 0
@@ -206,7 +206,7 @@ func (d *bindfsDriver) Get(r *volume.GetRequest) (*volume.GetResponse, error) {
 		return &volume.GetResponse{}, logError("volume %s not found", r.Name)
 	}
 
-	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.mountPoint}}, nil
+	return &volume.GetResponse{Volume: &volume.Volume{Name: r.Name, Mountpoint: v.Mountpoint}}, nil
 }
 
 func (d *bindfsDriver) List() (*volume.ListResponse, error) {
@@ -217,7 +217,7 @@ func (d *bindfsDriver) List() (*volume.ListResponse, error) {
 
 	var vols []*volume.Volume
 	for name, v := range d.volumes {
-		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.mountPoint})
+		vols = append(vols, &volume.Volume{Name: name, Mountpoint: v.Mountpoint})
 	}
 	return &volume.ListResponse{Volumes: vols}, nil
 }
@@ -229,9 +229,9 @@ func (d *bindfsDriver) Capabilities() *volume.CapabilitiesResponse {
 }
 
 func (d *bindfsDriver) mountVolume(v *bindfsVolume) error {
-	cmd := exec.Command("bindfs", "/mnt/host" + v.sourcePath, v.mountPoint)
+	cmd := exec.Command("bindfs", "/mnt/host" + v.Sourcepath, v.Mountpoint)
 
-	for _, option := range v.options {
+	for _, option := range v.Options {
 		cmd.Args = append(cmd.Args, "-o", option)
 	}
 

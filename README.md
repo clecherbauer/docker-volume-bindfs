@@ -14,14 +14,12 @@ $ docker plugin install lebokus/bindfs
 # or to enable debug 
 docker plugin install lebokus/bindfs DEBUG=1
 
-# or to change where plugin state is stored
-docker plugin install lebokus/bindfs state.source=<any_folder>
 ```
 
 2 - Create a volume
 
 ```
-$ docker volume create -d lebokus/bindfs -o sourcePath=$PWD map=$UID/0:@$UID/@0 [-o <any_bindfs_-o_option> ] bindfsvolume
+$ docker volume create -d lebokus/bindfs -o sourcePath=$PWD -o map=$UID/0:@$UID/@0 [-o <any_bindfs_-o_option> ] bindfsvolume
 
 $ docker volume ls
 DRIVER              VOLUME NAME
@@ -57,7 +55,7 @@ services:
 
 volumes:
     data:
-        driver: lebokus/bindfs:next
+        driver: lebokus/bindfs:latest
         driver_opts:
             sourcePath: "${PWD}"
             map: "${UID}/0:@${UID}/@0"
