@@ -1,4 +1,6 @@
 # Docker volume plugin for bindfs
+[![Build Status](https://travis-ci.org/lebokus/docker-volume-bindfs.svg?branch=master)](https://travis-ci.org/lebokus/docker-volume-bindfs)
+
 This project is based on vieux/docker-volume-sshfs.
 With this plugin you're able to mount a given path and remap its owner and group.
 
@@ -34,7 +36,7 @@ lebokus/bindfs      bindfsvolume
 3 - Use the volume
 
 ```
-$ docker run -it -v bindfsvolume:<path> busybox ls <path>
+$ docker run -it -v bindfsvolume:<path> busybox ls -la <path>
 ```
 
 ## docker-compose example
