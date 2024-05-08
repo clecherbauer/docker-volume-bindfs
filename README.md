@@ -1,3 +1,7 @@
+This project is no longer maintained.
+Please use the fork from [StudioEtrange/docker-volume-bindfs](https://github.com/StudioEtrange/docker-volume-bindfs) instead.
+
+
 # Docker volume plugin for bindfs
 [![Build Status](https://travis-ci.org/lebokus/docker-volume-bindfs.svg?branch=master)](https://travis-ci.org/lebokus/docker-volume-bindfs)
 
